@@ -60,9 +60,12 @@ Add the server to your Claude Desktop configuration:
 {
   "mcpServers": {
     "mcp-server-data-parser": {
-      "command": "/path/to/python",
+      "command": "/Path/to/.local/bin/uv",
       "args": [
-        "/path/to/data-parser/src/mcp_server_data_parser/server.py"
+        "--directory",
+        "path/to/directory",
+        "run",
+        "mcp-server-data-parser"
       ]
     }
   }
