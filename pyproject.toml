@@ -14,5 +14,10 @@ dependencies = [
 requires = [ "hatchling",]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+]
+
 [project.scripts]
 mcp-server-data-parser = "mcp_server_data_parser:main"

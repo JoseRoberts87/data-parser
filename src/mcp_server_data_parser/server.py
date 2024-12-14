@@ -16,6 +16,7 @@ from .visualizations import visualize_data
 # Global storage for loaded datasets
 datasets: Dict[str, pd.DataFrame] = {}
 metadata: Dict[str, Dict[str, Any]] = {}  # Store metadata about datasets
+columns: List[str] = []
 
 SERVER_NAME: str = "mcp-server-data-parser"
 
@@ -119,6 +120,25 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["dataset_name", "visualization_type"]
             },
+        ),
+        types.Tool(
+            name="list-columns",
+            description="List all columns in a dataset with their information",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_name": {
+                        "type": "string",
+                        "description": "Name of the dataset to examine"
+                    },
+                    "include_stats": {
+                        "type": "boolean",
+                        "description": "Whether to include basic statistics for each column",
+                        "default": False
+                    }
+                },
+                "required": ["dataset_name"]
+            },
         )
     ]
 
@@ -136,6 +156,8 @@ async def handle_call_tool(
         return await analyze_data(arguments)
     elif name == "visualize-data":
         return await create_visualization(arguments)
+    elif name == "list-columns":
+        return await list_columns(arguments)
     
     raise ValueError(f"Unknown tool: {name}")
 
@@ -166,6 +188,7 @@ async def load_csv_file(arguments: dict) -> list[types.TextContent]:
                 df[col] = pd.to_datetime(df[col])
 
         datasets[dataset_name] = df
+        columns.append(df.columns)
         
         # Store metadata about the dataset
         metadata[dataset_name] = {
@@ -177,6 +200,8 @@ async def load_csv_file(arguments: dict) -> list[types.TextContent]:
             "categorical_columns": list(df.select_dtypes(include=['object', 'category']).columns)
         }
 
+        metadata[dataset_name]["columns"] = list(df.columns)
+
         # Prepare summary of the loaded data
         summary = f"""
                 Successfully loaded dataset '{dataset_name}':
@@ -185,6 +210,7 @@ async def load_csv_file(arguments: dict) -> list[types.TextContent]:
                 - Numeric columns: {', '.join(metadata[dataset_name]['numeric_columns'])}
                 - Categorical columns: {', '.join(metadata[dataset_name]['categorical_columns'])}
                 - Date columns: {', '.join(date_columns)}
+                - Columns: {', '.join(df.columns)}
                 - Memory usage: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB
              """
 
@@ -192,6 +218,83 @@ async def load_csv_file(arguments: dict) -> list[types.TextContent]:
 
     except Exception as e:
         raise ValueError(f"Error loading CSV file: {str(e)}")
+
+async def list_columns(arguments: dict) -> list[types.TextContent]:
+    """List columns and their information for a dataset."""
+    dataset_name = arguments.get("dataset_name")
+    include_stats = arguments.get("include_stats", False)
+
+    if not dataset_name:
+        raise ValueError("dataset_name is required")
+
+    if dataset_name not in datasets:
+        raise ValueError(f"Dataset '{dataset_name}' not found. Please load it first using load-csv.")
+
+    df = datasets[dataset_name]
+    meta = metadata[dataset_name]
+    
+    # Basic column information
+    columns_info = []
+    for col in df.columns:
+        col_info = {
+            "name": col,
+            "type": str(df[col].dtype),
+            "non_null_count": int(df[col].count()),
+            "null_count": int(df[col].isna().sum()),
+            "category": ("numeric" if col in meta["numeric_columns"] 
+                       else "date" if col in meta["date_columns"]
+                       else "categorical")
+        }
+        
+        # Include basic statistics if requested
+        if include_stats:
+            if col in meta["numeric_columns"]:
+                col_info.update({
+                    "min": float(df[col].min()),
+                    "max": float(df[col].max()),
+                    "mean": float(df[col].mean()),
+                    "std": float(df[col].std()),
+                    "unique_values": int(df[col].nunique())
+                })
+            elif col in meta["date_columns"]:
+                col_info.update({
+                    "earliest": str(df[col].min()),
+                    "latest": str(df[col].max()),
+                    "unique_dates": int(df[col].nunique())
+                })
+            else:  # categorical
+                col_info.update({
+                    "unique_values": int(df[col].nunique()),
+                    "most_common": df[col].mode()[0] if not df[col].empty else None,
+                    "most_common_count": int(df[col].value_counts().iloc[0]) if not df[col].empty else 0
+                })
+        
+        columns_info.append(col_info)
+
+    # Format the output
+    output = ["Columns in dataset '" + dataset_name + "':\n"]
+    
+    for col_info in columns_info:
+        output.append(f"\n{col_info['name']}:")
+        output.append(f"  Type: {col_info['type']}")
+        output.append(f"  Category: {col_info['category']}")
+        output.append(f"  Non-null count: {col_info['non_null_count']:,}")
+        output.append(f"  Null count: {col_info['null_count']:,}")
+        
+        if include_stats:
+            if col_info["category"] == "numeric":
+                output.append(f"  Range: {col_info['min']} to {col_info['max']}")
+                output.append(f"  Mean: {col_info['mean']:.2f}")
+                output.append(f"  Std: {col_info['std']:.2f}")
+                output.append(f"  Unique values: {col_info['unique_values']:,}")
+            elif col_info["category"] == "date":
+                output.append(f"  Range: {col_info['earliest']} to {col_info['latest']}")
+                output.append(f"  Unique dates: {col_info['unique_dates']:,}")
+            else:
+                output.append(f"  Unique values: {col_info['unique_values']:,}")
+                output.append(f"  Most common: {col_info['most_common']} ({col_info['most_common_count']:,} occurrences)")
+
+    return [types.TextContent(type="text", text="\n".join(output))]
 
 async def analyze_data(arguments: dict) -> list[types.TextContent]:
     """Analyze a loaded dataset based on a question."""
@@ -366,7 +469,7 @@ async def create_visualization(arguments: dict) -> list[types.TextContent]:
     """Create a visualization based on the provided arguments."""
     dataset_name = arguments.get("dataset_name")
     vis_type = arguments.get("visualization_type")
-    columns = arguments.get("columns")
+    columns = str(arguments.get("columns", [])).split(',')
     group_by = arguments.get("group_by")
     options = arguments.get("options", {})
 
@@ -393,10 +496,6 @@ async def create_visualization(arguments: dict) -> list[types.TextContent]:
             types.TextContent(
                 type="text",
                 text="Visualization data format: " + vis_type
-            ),
-            types.TextContent(
-                type="application/json",
-                text=json.dumps(vis_data, indent=2)
             )
         ]
         
