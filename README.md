@@ -79,10 +79,10 @@ Add the server to your Claude Desktop configuration:
     "mcp-server-data-parser": {
       "command": "/Path/to/.local/bin/uv",
       "args": [
-        "--directory",
-        "path/to/directory",
-        "run",
-        "mcp-server-data-parser"
+         "--directory",
+         "path/to/directory",
+         "run",
+         "mcp-server-data-parser"
       ]
     }
   }
