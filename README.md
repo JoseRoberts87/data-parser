@@ -1,6 +1,6 @@
 # Data Parser MCP Server
 
-A Model Context Protocol (MCP) server for loading, analyzing, and querying CSV data. This server enables loading CSV files into memory and performing various types of data analysis through natural language queries.
+A Model Context Protocol (MCP) server for loading, analyzing, and visualizing CSV data. This server enables loading CSV files into memory, performing various types of data analysis through natural language queries, and creating data visualizations.
 
 ## Features
 
@@ -36,6 +36,23 @@ A Model Context Protocol (MCP) server for loading, analyzing, and querying CSV d
 - Missing value detection
 - Outlier detection using IQR method
 - Data completeness reporting
+
+### Visualization Capabilities
+
+#### Chart Types
+- Bar charts
+- Line charts
+- Scatter plots
+- Pie charts
+- Heatmaps
+- Box plots
+- Histograms
+
+#### Visualization Features
+- Group-by functionality for aggregated visualizations
+- Multiple column support
+- Customizable options (bins, titles, etc.)
+- JSON-based chart data format for easy integration
 
 ## Installation
 
@@ -116,6 +133,85 @@ await call_tool("analyze-data", {
 })
 ```
 
+#### 3. visualize-data
+Creates various types of data visualizations.
+
+Parameters:
+- `dataset_name`: Name of the dataset to visualize
+- `visualization_type`: Type of visualization to create
+  - Options: "bar", "line", "scatter", "pie", "heatmap", "boxplot", "histogram"
+- `columns`: List of columns to include in visualization
+- `group_by`: (Optional) Column to group by
+- `options`: (Optional)
+  - `bins`: Number of bins for histogram
+  - `title`: Chart title
+
+Examples:
+```python
+# Bar chart
+await call_tool("visualize-data", {
+    "dataset_name": "sales_data",
+    "visualization_type": "bar",
+    "columns": ["revenue"],
+    "group_by": "region"
+})
+
+# Scatter plot
+await call_tool("visualize-data", {
+    "dataset_name": "sales_data",
+    "visualization_type": "scatter",
+    "columns": ["price", "quantity"]
+})
+
+# Histogram
+await call_tool("visualize-data", {
+    "dataset_name": "sales_data",
+    "visualization_type": "histogram",
+    "columns": ["revenue"],
+    "options": {
+        "bins": 30,
+        "title": "Revenue Distribution"
+    }
+})
+```
+
+### Visualization Types and Use Cases
+
+1. **Bar Charts**
+   - Compare values across categories
+   - Show distributions of categorical data
+   - Display aggregated values by group
+
+2. **Line Charts**
+   - Show trends over time
+   - Track changes in metrics
+   - Compare multiple series
+
+3. **Scatter Plots**
+   - Identify correlations between variables
+   - Spot patterns and clusters
+   - Detect outliers
+
+4. **Pie Charts**
+   - Show composition of a whole
+   - Display percentage distributions
+   - Compare parts of a total
+
+5. **Heatmaps**
+   - Visualize correlation matrices
+   - Show patterns in dense data
+   - Display cross-tabulations
+
+6. **Box Plots**
+   - Show distribution characteristics
+   - Identify outliers
+   - Compare distributions across groups
+
+7. **Histograms**
+   - View data distributions
+   - Identify patterns and skewness
+   - Check for normality
+
 ### Supported Analysis Questions
 
 The server understands various types of analysis questions including:
@@ -148,16 +244,13 @@ The server understands various types of analysis questions including:
    - "Find outliers in the data"
    - "How many null values are there?"
 
-7. Basic Information
-   - "Count unique values"
-   - "Show me a summary"
-   - "Describe the dataset"
-
 ## Dependencies
 
 - Python 3.9+
 - pandas
 - numpy
+- matplotlib
+- seaborn
 - MCP SDK
 
 ## Development
