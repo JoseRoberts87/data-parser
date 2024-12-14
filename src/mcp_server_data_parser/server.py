@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Dict, List, Optional, Union, Any
 import pandas as pd
 import numpy as np
@@ -8,6 +9,9 @@ from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
+
+from .visualizations import visualize_data
+
 
 # Global storage for loaded datasets
 datasets: Dict[str, pd.DataFrame] = {}
@@ -79,6 +83,42 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["dataset_name", "question"]
             },
+        ),
+        types.Tool(
+            name="visualize-data",
+            description="Create data visualizations from loaded datasets",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_name": {
+                        "type": "string",
+                        "description": "Name of the dataset to visualize"
+                    },
+                    "visualization_type": {
+                        "type": "string",
+                        "enum": ["bar", "line", "scatter", "pie", "heatmap", "boxplot", "histogram"],
+                        "description": "Type of visualization to create"
+                    },
+                    "columns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns to include in visualization"
+                    },
+                    "group_by": {
+                        "type": "string",
+                        "description": "Column to group by (optional)"
+                    },
+                    "options": {
+                        "type": "object",
+                        "properties": {
+                            "bins": {"type": "integer", "description": "Number of bins for histogram"},
+                            "title": {"type": "string", "description": "Chart title"}
+                        },
+                        "required": []
+                    }
+                },
+                "required": ["dataset_name", "visualization_type"]
+            },
         )
     ]
 
@@ -94,6 +134,8 @@ async def handle_call_tool(
         return await load_csv_file(arguments)
     elif name == "analyze-data":
         return await analyze_data(arguments)
+    elif name == "visualize-data":
+        return await create_visualization(arguments)
     
     raise ValueError(f"Unknown tool: {name}")
 
@@ -137,14 +179,14 @@ async def load_csv_file(arguments: dict) -> list[types.TextContent]:
 
         # Prepare summary of the loaded data
         summary = f"""
-Successfully loaded dataset '{dataset_name}':
-- Number of rows: {len(df):,}
-- Number of columns: {len(df.columns)}
-- Numeric columns: {', '.join(metadata[dataset_name]['numeric_columns'])}
-- Categorical columns: {', '.join(metadata[dataset_name]['categorical_columns'])}
-- Date columns: {', '.join(date_columns)}
-- Memory usage: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB
-        """
+                Successfully loaded dataset '{dataset_name}':
+                - Number of rows: {len(df):,}
+                - Number of columns: {len(df.columns)}
+                - Numeric columns: {', '.join(metadata[dataset_name]['numeric_columns'])}
+                - Categorical columns: {', '.join(metadata[dataset_name]['categorical_columns'])}
+                - Date columns: {', '.join(date_columns)}
+                - Memory usage: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB
+             """
 
         return [types.TextContent(type="text", text=summary.strip())]
 
@@ -320,7 +362,47 @@ def analyze_question(df: pd.DataFrame, question: str, meta: dict, group_by: Opti
             "- Count and unique value analysis\n"
             "\nPlease rephrase your question using these keywords."
         )
+async def create_visualization(arguments: dict) -> list[types.TextContent]:
+    """Create a visualization based on the provided arguments."""
+    dataset_name = arguments.get("dataset_name")
+    vis_type = arguments.get("visualization_type")
+    columns = arguments.get("columns")
+    group_by = arguments.get("group_by")
+    options = arguments.get("options", {})
 
+    if not dataset_name or not vis_type:
+        raise ValueError("Both dataset_name and visualization_type are required")
+
+    if dataset_name not in datasets:
+        raise ValueError(f"Dataset '{dataset_name}' not found. Please load it first using load-csv.")
+
+    df = datasets[dataset_name]
+    
+    try:
+        # Generate visualization data
+        vis_data = visualize_data(
+            df=df,
+            vis_type=vis_type,
+            columns=columns,
+            group_by=group_by,
+            **options
+        )
+        
+        # Convert visualization data to a properly formatted response
+        return [
+            types.TextContent(
+                type="text",
+                text="Visualization data format: " + vis_type
+            ),
+            types.TextContent(
+                type="application/json",
+                text=json.dumps(vis_data, indent=2)
+            )
+        ]
+        
+    except Exception as e:
+        raise ValueError(f"Error creating visualization: {str(e)}")
+    
 async def main():
     # Run the server using stdin/stdout streams
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):

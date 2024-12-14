@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "MCP server for parsing and analyzing CSV data"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib>=3.9.4",
     "mcp>=1.1.2",
     "pandas>=2.2.3",
+    "seaborn>=0.13.2",
 ]
 
 [build-system]
