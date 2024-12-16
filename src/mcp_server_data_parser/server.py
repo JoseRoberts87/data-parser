@@ -11,6 +11,7 @@ from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
 from .visualizations import visualize_data
+from .plot_handler import create_visualization as create_viz
 
 
 # Global storage for loaded datasets
@@ -300,7 +301,7 @@ async def analyze_data(arguments: dict) -> list[types.TextContent]:
     """Analyze a loaded dataset based on a question."""
     dataset_name = arguments.get("dataset_name")
     question = arguments.get("question")
-    columns = arguments.get("columns", [])
+    columns = str(arguments.get("columns", [])).split(',')
     group_by = arguments.get("group_by")
 
     if not dataset_name or not question:
@@ -483,7 +484,7 @@ async def create_visualization(arguments: dict) -> list[types.TextContent]:
     
     try:
         # Generate visualization data
-        vis_data = visualize_data(
+        image_base64 = create_viz(
             df=df,
             vis_type=vis_type,
             columns=columns,
@@ -492,12 +493,17 @@ async def create_visualization(arguments: dict) -> list[types.TextContent]:
         )
         
         # Convert visualization data to a properly formatted response
-        return [
-            types.TextContent(
-                type="text",
-                text="Visualization data format: " + vis_type
-            )
-        ]
+        # return [
+        #     types.TextContent(
+        #         type="text",
+        #         text="Visualization data format: " + vis_type
+        #     ),
+        #     types.ImageContent(
+        #         type="image",
+        #         data=image_base64,
+        #         mime_type="image/png"
+        #     )
+        # ]
         
     except Exception as e:
         raise ValueError(f"Error creating visualization: {str(e)}")
